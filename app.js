@@ -61,8 +61,23 @@ app.get('/', (req, res) => {
 // @route POST /upload
 // @desc Uploads file to DB - upload.single('file') -> middleware with field name as file
 app.post('/upload',upload.single('file'), (req, res)=>{
-    res.json({file:req.file});
+    // res.json({file:req.file});
+    res.redirect('/');
 })
+
+// @route GET /files
+// @desc Display all files in JSON
+app.get('/files', (req, res)=>{
+    gfs.files.find().toArray((err, files)=>{
+        //Check if files
+        if(!files || files.length === 0){
+            return res.status(404).json({err:'No files exists'});
+        }
+
+        //Files exists
+        return res.json({files});
+    });
+});
 
 const port = 3500;
 
