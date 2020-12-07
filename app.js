@@ -20,7 +20,7 @@ app.set('view engine', 'ejs');
 const MongoURI = "mongodb+srv://meanapp:AEKzArBnCBP1ehTH@cluster0.fgaaw.mongodb.net/mongouploads";
 
 //Create Mongo connection
-const conn = mongoose.createConnection(MongoURI);
+const conn = mongoose.createConnection(MongoURI,{ useNewUrlParser: true, useUnifiedTopology: true });
 
 //Initialize gfs - ref: https://github.com/aheckmann/gridfs-stream
 let gfs;
@@ -131,6 +131,19 @@ app.get('/image/:filename', (req, res)=>{
         }
     });
 });
+
+// @route DELETE /files/:id
+// @desc delete file
+
+app.delete('/files/:id', (req, res)=>{
+    console.log(req.params.id)
+    gfs.remove({_id:req.params.id, root:'uploads'}, (err, gridStore)=> {
+        if (err) {
+            return res.status(404).json({err:err});
+        }
+        res.redirect('/');
+    });
+})
 
 const port = 3500;
 
