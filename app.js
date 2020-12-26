@@ -1,3 +1,4 @@
+const http = require('http');
 const express = require('express');
 const bodyParser = require('body-parser');
 const path = require('path');
@@ -12,15 +13,24 @@ const app = express();
 
 //MiddleWare
 app.use(bodyParser.json());
-app.use(methodOverride('_method'));
+// app.use(methodOverride('_method'));
+
+app.use((req, res, next)=>{
+    res.setHeader('Access-Control-Allow-Origin','*');
+    res.setHeader('Access-Control-Allow-Headers','Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.setHeader('Access-Control-Allow-Methods','GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    next()
+});
+
 //Setting View Engine
-app.set('view engine', 'ejs');
+// app.set('view engine', 'ejs');
 
 //Mongo URI
-const MongoURI = "mongodb+srv://meanapp:AEKzArBnCBP1ehTH@cluster0.fgaaw.mongodb.net/mongouploads";
+const MongoURI = "mongodb+srv://meqadeem:MeEdAqEm2615@cluster0.ofzj9.mongodb.net/mongouploads";
 
 //Create Mongo connection
-const conn = mongoose.createConnection(MongoURI,{ useNewUrlParser: true, useUnifiedTopology: true });
+const conn = mongoose.createConnection(MongoURI,{  useUnifiedTopology: true ,useNewUrlParser: true, useCreateIndex:true});
+
 
 //Initialize gfs - ref: https://github.com/aheckmann/gridfs-stream
 let gfs;
@@ -28,6 +38,7 @@ conn.once('open', () => {
     //Init Stream
     gfs = Grid(conn.db, mongoose.mongo);
     gfs.collection('uploads');
+    // console.log("Connected to DataBase")
     // all set!
 })
 
@@ -41,8 +52,14 @@ const storage = new GridFsStorage({
                     return reject(err);
                 }
                 const filename = buf.toString('hex') + path.extname(file.originalname);
+                const metadata = { 
+                    originalname: file.originalname,
+                    secretCode:req.body.secretCode,
+                    views:0
+                 }
                 const fileInfo = {
                     filename: filename,
+                    metadata:metadata,
                     bucketName: 'uploads'
                 };
                 resolve(fileInfo);
@@ -54,32 +71,40 @@ const upload = multer({ storage });
 
 // @route GET /
 // @desc Loads form
-app.get('/', (req, res) => {
-    // res.render('index');
-    gfs.files.find().toArray((err, files)=>{
-        //Check if files
-        if(!files || files.length === 0){
-            // return res.status(404).json({err:'No files exists'});
-            res.render('index',{files:false});
-        }else{
-            files.map(file=>{
-                if(file.contentType==='image/jpeg'|| file.contentType==='image/png'){
-                    file.isImage=true;
-                }else{
-                    file.isImage=false;
-                }
-            });
-            res.render('index',{files:files});
-        }
+// app.get('/', (req, res) => {
+//     // res.render('index');
+//     gfs.files.find().toArray((err, files)=>{
+//         //Check if files
+//         if(!files || files.length === 0){
+//             return res.status(404).json({err:'No files exists'});
+//             // res.render('index',{files:false});
+//         }else{
+//             files.map(file=>{
+//                 if(file.contentType==='image/jpeg'|| file.contentType==='image/png'){
+//                     file.isImage=true;
+//                 }else{
+//                     file.isImage=false;
+//                 }
+//             });
+//             return res.status(200).json({files:files});
+//             // res.render('index',{files:files});
+//         }
 
-    });
-});
+//     });
+// });
 
 // @route POST /upload
 // @desc Uploads file to DB - upload.single('file') -> middleware with field name as file
 app.post('/upload',upload.single('file'), (req, res)=>{
-    // res.json({file:req.file});
-    res.redirect('/');
+    // console.log(req.body)
+    // console.log(req.file)
+    if(req.file.chunkSize>0){
+    res.status(200).json({message:"Image uploaded successfully.",fileName:req.file.filename});
+    }else{
+        res.status(500).json({message:'Failed to upload Image!'})
+    }
+
+    // res.redirect('/');
 })
 
 // @route GET /files
@@ -90,9 +115,11 @@ app.get('/files', (req, res)=>{
         if(!files || files.length === 0){
             return res.status(404).json({err:'No files exists'});
         }
-
+        // console.log(files);
+        let filesAr=files.map((fl)=>fl.filename)
+        // console.log(filesAr)
         //Files exists
-        return res.json({files});
+        return res.json({filesAr});
     });
 });
 
@@ -106,45 +133,69 @@ app.get('/files/:filename', (req, res)=>{
         }
 
         //File exists
-        return res.json({file});
+        // console.log(file);
+        let fileName=file.filename
+        // console.log(fileName)
+        return res.json({fileName});
     });
 });
 
 // @route GET /image/:filename
 // @desc Display Image
 app.get('/image/:filename', (req, res)=>{
-    gfs.files.findOne({filename:req.params.filename},(err,file)=>{
-        //Check if file
-        if(!file || file.length === 0){
-            return res.status(404).json({err:'No file exists'});
-        }
-
-        //When file exist - check if image
-        if(file.contentType==='image/jpeg' || file.contentType === 'image/png'){
-            //Read Output to browser
-            const readstream = gfs.createReadStream(file.filename);
-            readstream.pipe(res);
-        }else{
-            res.status(404).json({
-                err:"Not an image."
-            });
-        }
-    });
+    if(typeof(req.params.filename)!=='undefined'){
+        gfs.files.findOne({filename:req.params.filename},(err,file)=>{
+            //Check if file
+            if(!file || file.length === 0){
+                return res.status(404).json({err:'No file exists'});
+            }
+    
+            //When file exist - check if image
+            if(file.contentType==='image/jpeg' || file.contentType === 'image/png'){
+                //Read Output to browser
+                const readstream = gfs.createReadStream(file.filename);
+                readstream.pipe(res);
+            }else{
+                res.status(404).json({
+                    err:"Not an image."
+                });
+            }
+        });
+    }else{
+        res.status(404).json({
+            err:"Invalide Image Id."
+        });
+    }
 });
 
 // @route DELETE /files/:id
 // @desc delete file
 
-app.delete('/files/:id', (req, res)=>{
-    console.log(req.params.id)
-    gfs.remove({_id:req.params.id, root:'uploads'}, (err, gridStore)=> {
+app.delete('/files/:secretCode/:filename', (req, res)=>{
+    // console.log(req.params.id)
+    gfs.remove({filename:req.params.filename, 'metadata.secretCode':req.params.secretCode,root:'uploads'}, (err, gridStore)=> {
         if (err) {
             return res.status(404).json({err:err});
         }
-        res.redirect('/');
+        res.json({message:'File deleted successfully'});
+    });
+});
+
+// @route PUT /files/:filename
+// @desc update metadata of a file
+
+app.put('/files/:filename', (req,res) => {
+    gfs.files.updateOne({filename:req.params.filename},{$inc:{'metadata.views':1}}, function(err, result){
+        if(err){
+            console.log('got some error');
+            return res.status(404).json({err:err});
+        }
+        res.json('successfully updated')
     });
 })
 
-const port = 3500;
+const port = process.env.PORT || 3500;
 
 app.listen(port, () => console.log(`Server started on port ${port}`));
+
+
